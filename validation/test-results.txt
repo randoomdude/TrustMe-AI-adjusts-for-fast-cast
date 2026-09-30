@@ -1,0 +1,37 @@
+PASS Original 1.3 summons all five on its fixed eight-second schedule
+PASS Installed 1.3.3 reproduces three of five under post-cast lockout
+PASS 1.3.5 summons all five, preserving profile order, in under 16 seconds
+PASS Slower casts wait for completion and are never overlapped
+PASS Missed action packets recover through the exact party member
+PASS Missing finish packet uses recast plus party membership
+PASS No packets and no recast change still succeeds from party state
+PASS Longer server recovery retries the SAME trust, without skipping
+PASS Unrelated party growth cannot confirm a rejected trust
+PASS No response is bounded and leaves all entries recoverable
+PASS Completed packet without a joined trust does not consume the queue
+PASS Late membership resolves a paused cast and resumes the remaining queue
+PASS Recast wait is read from the client and reported only once
+PASS Already-summoned II and UC party names are matched correctly
+PASS Pre-existing ambiguous II family is explained instead of claiming exact identity
+PASS Inactive stale party entries are not treated as successful summons
+PASS Duplicate submission includes the active entry
+PASS Interruption retains the same trust and honors recovery
+PASS Clear during a cast drains it before a newly queued summon
+PASS Individual UI cancellation cannot overlap an in-flight cast
+PASS Zone-out cancels all work, including an in-flight record
+PASS Character changes cancel pending work
+PASS Death cancels pending work
+PASS Movement waits without sending or log spam and automatically resumes
+PASS Full party pauses once and does not send commands
+PASS Unknown and unlearned trust entries report explicitly
+PASS Other actor and other spell completions cannot confirm this trust
+PASS Short packet is ignored before any bit extraction
+PASS 1.3.4 reproduces the live Arciela II verifying stall
+PASS Exact user profile completes all five with Arciela II named Arciela
+PASS Missing every action packet still confirms Arciela II by its new party alias
+PASS Matching successful Trust completion and recast tolerate unreadable party names
+PASS Trust completion without recast or roster gets two bounded rechecks
+PASS Verification retry can actually recover a failed cast once the game permits it
+PASS Cancelled verifying entry is drained without sending verification retries
+PASS Duplicate late start for a completed trust does not fabricate another cast
+PASS All shipped Lua files compile under LuaJIT 2.1

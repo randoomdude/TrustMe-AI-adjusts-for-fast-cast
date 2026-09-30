@@ -1,0 +1,185 @@
+local chat = require('chat')
+local http = require('libs.nonBlockingRequests')
+local cipherData = require('data.cipherData')
+
+local trustUtils = {}
+
+function trustUtils.fetchLoginCampaignCiphers()
+    tme.workerResult = nil
+
+    local url = 'https://www.bg-wiki.com/ffxi/Repeat_Login_Campaign#Current_Login_Campaign'
+
+    http.get(url, nil, function (body, err, status)
+        if err then
+            print(chat.header(addon.name):append(chat.error(string.format('Failed to fetch current login campaign: %s', err))))
+            return
+        end
+
+        if not body then
+            print(chat.header(addon.name):append(chat.error('Failed to fetch current login campaign')))
+            return
+        end
+        local ciphers = {}
+
+        if body then
+            for cipher in body:gmatch('title="(Cipher: [^"]+)"') do
+                table.insert(ciphers, cipher)
+            end
+        end
+
+        tme.workerResult = ciphers
+
+        if #ciphers > 0 then
+            local ownedTrusts = trustUtils.getTrustNames(trustUtils.getTrusts())
+            local missingCiphers = trustUtils.findMissingCiphers(ciphers, ownedTrusts)
+            if #missingCiphers > 0 then
+                local formattedList = {}
+                for _, entry in ipairs(missingCiphers) do
+                    table.insert(formattedList, string.format('%s (%s)', entry.cipher, entry.name))
+                end
+                local output = table.concat(formattedList, ', ')
+
+                print(chat.header(addon.name):append(chat.message(string.format('Current login campaign ciphers you are missing: %s', output))))
+            else
+                print(chat.header(addon.name):append(chat.success('You already own every cipher sold in the current login campaign')))
+            end
+        end
+    end)
+
+    return true
+end
+
+-- Credits to Thorny, from ttimers
+function trustUtils.getTrusts()
+    local ownedTrusts = {}
+    local resMgr = AshitaCore:GetResourceManager();
+    local player = AshitaCore:GetMemoryManager():GetPlayer()
+    local mainJob = AshitaCore:GetMemoryManager():GetPlayer():GetMainJob()
+    local mainJobLevel = AshitaCore:GetMemoryManager():GetPlayer():GetMainJobLevel();
+    local subJob = AshitaCore:GetMemoryManager():GetPlayer():GetSubJob();
+    local subJobLevel = AshitaCore:GetMemoryManager():GetPlayer():GetSubJobLevel();
+    local jpTotal = AshitaCore:GetMemoryManager():GetPlayer():GetJobPoints(mainJob);
+
+    for i = 1, 0x400 do
+        local res = resMgr:GetSpellById(i)
+        if (res) and (player:HasSpell(i)) then
+            local levelRequired = res.LevelRequired;
+
+            -- Maybe not best workaround, but trust are all usable at WAR1.
+            if (levelRequired[2] == 1) then
+                local hasSpell = false;
+                local jpMask = res.JobPointMask;
+                if (bit.band(bit.rshift(jpMask, mainJob), 1) == 1) then
+                    if (mainJobLevel == 99) and (jpTotal >= levelRequired[mainJob + 1]) then
+                        hasSpell = true;
+                    end
+                elseif (levelRequired[mainJob + 1] ~= -1) and (mainJobLevel >= levelRequired[mainJob + 1]) then
+                    hasSpell = true;
+                end
+
+                if (bit.band(bit.rshift(jpMask, subJob), 1) == 0) then
+                    if (levelRequired[subJob + 1] ~= -1) and (subJobLevel >= levelRequired[subJob + 1]) then
+                        hasSpell = true;
+                    end
+                end
+
+                if (hasSpell) then
+                    table.insert(ownedTrusts, res)
+                end
+            end
+        end
+    end
+
+    table.sort(ownedTrusts, function (a, b)
+        return a.Name[1] < b.Name[1]
+    end)
+
+    return ownedTrusts
+end
+
+function trustUtils.getTrustNames(t)
+    local names = {}
+    for _, trust in ipairs(t) do
+        if trust.Name and trust.Name[1] then
+            table.insert(names, trust.Name[1])
+        end
+    end
+    return names
+end
+
+function trustUtils.findMissingCiphers(ciphers, ownedTrusts)
+    local missing = {}
+
+    for _, cipherName in ipairs(ciphers) do
+        local trustName = nil
+
+        for _, entry in pairs(cipherData) do
+            if entry.en and entry.en:lower() == cipherName:lower() then
+                trustName = entry.trust_en
+                break
+            end
+        end
+
+        if trustName then
+            local owned = false
+
+            for _, ownedName in ipairs(ownedTrusts) do
+                if ownedName:lower() == trustName:lower() then
+                    owned = true
+                    break
+                end
+            end
+
+            if not owned then
+                table.insert(missing, { cipher = cipherName, name = trustName })
+            end
+        else
+            print(chat.header(addon.name):append(chat.error(string.format('Could not find corresponding trust name for %s', cipherName))))
+        end
+    end
+
+    return missing
+end
+
+function trustUtils.findMissingTrusts(ownedTrusts, hideUC, hideTimeLimited)
+    local missing = {}
+    local trustData = require('data/trustData')
+
+    for _, entry in pairs(trustData) do
+        local trustName = nil
+        if entry.en then
+            trustName = entry.en
+        end
+
+        if trustName then
+            local owned = false
+
+            for _, ownedName in ipairs(ownedTrusts) do
+                if ownedName:lower() == trustName:lower() then
+                    owned = true
+                    break
+                end
+            end
+
+            if
+                not owned and
+                trustUtils.hideUnityTrustsFromList(hideUC, trustName) and
+                trustUtils.hideTimeLimitedTrustsFromList(hideTimeLimited, trustName)
+            then
+                table.insert(missing, trustName)
+            end
+        end
+    end
+
+    return missing
+end
+
+function trustUtils.hideUnityTrustsFromList(checkboxValue, trustIdentifier)
+    return (not checkboxValue or (checkboxValue and not string.find(trustIdentifier, '%(UC%)')))
+end
+
+function trustUtils.hideTimeLimitedTrustsFromList(checkboxValue, trustIdentifier)
+    return (not checkboxValue or (checkboxValue and not T { 'Cornelia', 'Matsui-P' }:contains(trustIdentifier)))
+end
+
+return trustUtils
